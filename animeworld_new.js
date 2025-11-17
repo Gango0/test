@@ -6,7 +6,7 @@ const mangayomiSources = [{
     "iconUrl": "https://raw.githubusercontent.com/cranci1/Ryu/d48d716ec6c5ef9ae7b3711c117f920b0c7eb1ce/Ryu/Assets.xcassets/Sources/AnimeWorld.imageset/animeworld.png",
     "typeSource": "single",
     "itemType": 1,
-    "version": "1.0.6",
+    "version": "1.0.4",
     "pkgPath": "animeworld.js"
 }];
 
@@ -35,84 +35,15 @@ class DefaultExtension extends MProvider {
     }
 
     async getPopular(page) {
-        try {
-            const url = `${this.baseUrl}/filter?sort=6&page=${page}`;
-            const resp = await this.client.get(url, { headers: this.getHeaders() });
-            const html = resp.body;
-
-            return this.parseAnimeList(html);
-        } catch (error) {
-            throw error;
-        }
+        throw new Error("getPopular not implemented");
     }
 
     get supportsLatest() {
-        return true;
+        return false;
     }
 
     async getLatestUpdates(page) {
-        try {
-            const url = `${this.baseUrl}/updated?page=${page}`;
-            const resp = await this.client.get(url, { headers: this.getHeaders() });
-            const html = resp.body;
-
-            return this.parseAnimeList(html);
-        } catch (error) {
-            throw error;
-        }
-    }
-
-    parseAnimeList(html) {
-        const filmListRegex = /<div class="film-list">([\s\S]*?)<div class="clearfix"><\/div>\s*<\/div>/;
-        const filmListMatch = html.match(filmListRegex);
-
-        if (!filmListMatch) {
-            return { list: [], hasNextPage: false };
-        }
-
-        const filmListContent = filmListMatch[1];
-        const itemRegex = /<div class="item">[\s\S]*?<\/div>[\s]*<\/div>/g;
-        const items = filmListContent.match(itemRegex) || [];
-
-        const animeList = [];
-
-        for (const itemHtml of items) {
-            const imgMatch = itemHtml.match(/src="([^"]+)"/);
-            let imageUrl = imgMatch ? imgMatch[1] : "";
-
-            // Cerca il titolo in due modi diversi
-            let titleMatch = itemHtml.match(/class="name">([^<]+)</);
-            if (!titleMatch) {
-                titleMatch = itemHtml.match(/alt="([^"]+)"/);
-            }
-            const title = titleMatch ? titleMatch[1].trim() : "";
-
-            const hrefMatch = itemHtml.match(/href="([^"]+)"/);
-            let href = hrefMatch ? hrefMatch[1] : "";
-
-            if (imageUrl && title && href) {
-                if (!imageUrl.startsWith("https")) {
-                    imageUrl = imageUrl.startsWith("/") ? this.baseUrl + imageUrl : this.baseUrl + "/" + imageUrl;
-                }
-                if (!href.startsWith("https")) {
-                    href = href.startsWith("/") ? this.baseUrl + href : this.baseUrl + "/" + href;
-                }
-
-                animeList.push({
-                    link: href,
-                    name: title,
-                    imageUrl: imageUrl,
-                    description: ''
-                });
-            }
-        }
-
-        const hasNextPage = html.includes('id="go-next-page"');
-
-        return {
-            list: animeList,
-            hasNextPage: hasNextPage
-        };
+        throw new Error("getLatestUpdates not implemented");
     }
 
     async search(query, page) {
@@ -121,7 +52,50 @@ class DefaultExtension extends MProvider {
             const resp = await this.client.get(url, { headers: this.getHeaders() });
             const html = resp.body;
 
-            return this.parseAnimeList(html);
+            const filmListRegex = /<div class="film-list">([\s\S]*?)<div class="clearfix"><\/div>\s*<\/div>/;
+            const filmListMatch = html.match(filmListRegex);
+
+            if (!filmListMatch) {
+                return { list: [], hasNextPage: false };
+            }
+
+            const filmListContent = filmListMatch[1];
+            const itemRegex = /<div class="item">[\s\S]*?<\/div>[\s]*<\/div>/g;
+            const items = filmListContent.match(itemRegex) || [];
+
+            const animeList = [];
+
+            for (const itemHtml of items) {
+                const imgMatch = itemHtml.match(/src="([^"]+)"/);
+                let imageUrl = imgMatch ? imgMatch[1] : "";
+
+                const titleMatch = itemHtml.match(/class="name">([^<]+)</);
+                const title = titleMatch ? titleMatch[1].trim() : "";
+
+                const hrefMatch = itemHtml.match(/href="([^"]+)"/);
+                let href = hrefMatch ? hrefMatch[1] : "";
+
+                if (imageUrl && title && href) {
+                    if (!imageUrl.startsWith("https")) {
+                        imageUrl = imageUrl.startsWith("/") ? this.baseUrl + imageUrl : this.baseUrl + "/" + imageUrl;
+                    }
+                    if (!href.startsWith("https")) {
+                        href = href.startsWith("/") ? this.baseUrl + href : this.baseUrl + "/" + href;
+                    }
+
+                    animeList.push({
+                        link: href,
+                        name: title,
+                        imageUrl: imageUrl,
+                        description: ''
+                    });
+                }
+            }
+
+            return {
+                list: animeList,
+                hasNextPage: false
+            };
         } catch (error) {
             throw error;
         }
@@ -197,94 +171,24 @@ class DefaultExtension extends MProvider {
             const resp = await this.client.get(url, { headers: this.getHeaders() });
             const html = resp.body;
 
-            // Controlla errore copyright
-            if (html.includes('Copyright')) {
-                console.log("⚠ Video potrebbe essere protetto da copyright");
+            const idRegex = /<a[^>]+href="([^"]+)"[^>]*id="alternativeDownloadLink"/;
+            const match = html.match(idRegex);
+            
+            if (!match) {
+                return [];
             }
 
-            const videoList = [];
+            const streamUrl = match[1];
 
-            // METODO 1: Fallback principale - alternativeDownloadLink (sempre funzionante)
-            const altDownloadRegex = /<a[^>]+href="([^"]+)"[^>]*id="alternativeDownloadLink"/;
-            const altDownloadMatch = html.match(altDownloadRegex);
-            
-            if (altDownloadMatch) {
-                const directUrl = altDownloadMatch[1];
-                videoList.push({
-                    url: directUrl,
-                    quality: "AnimeWorld Server",
-                    originalUrl: directUrl,
-                    headers: {
-                        'Referer': this.baseUrl + '/',
-                        'Origin': this.baseUrl
-                    }
-                });
-            }
-
-            // METODO 2: Prova a trovare server alternativi via API
-            const epIdMatch = html.match(/data-episode-id="(\d+)"/);
-            
-            if (epIdMatch) {
-                const epId = epIdMatch[1];
-                
-                // Trova tutti i server tabs
-                const serverTabRegex = /<span class="server-tab"[^>]*data-name="([^"]+)"[^>]*>([^<]+)<\/span>/g;
-                let serverMatch;
-
-                while ((serverMatch = serverTabRegex.exec(html)) !== null) {
-                    const dataName = serverMatch[1];
-                    const serverName = serverMatch[2].trim();
-
-                    // Cerca la sezione del server
-                    const serverSectionRegex = new RegExp(
-                        `<div class="server"[^>]*data-name="${dataName}"[^>]*>([\\s\\S]*?)<\\/ul>\\s*<\\/div>`
-                    );
-                    const serverSectionMatch = html.match(serverSectionRegex);
-
-                    if (serverSectionMatch) {
-                        const dataIdRegex = new RegExp(
-                            `<a[^>]*data-episode-id="${epId}"[^>]*data-id="([^"]+)"`
-                        );
-                        const dataIdMatch = serverSectionMatch[1].match(dataIdRegex);
-
-                        if (dataIdMatch) {
-                            const dataId = dataIdMatch[1];
-                            
-                            try {
-                                const apiUrl = `${this.baseUrl}/api/episode/info?id=${dataId}&alt=0`;
-                                const apiResp = await this.client.get(apiUrl, {
-                                    headers: {
-                                        ...this.getHeaders(),
-                                        'Accept': 'application/json',
-                                        'Referer': url,
-                                        'X-Requested-With': 'XMLHttpRequest'
-                                    }
-                                });
-
-                                const apiData = JSON.parse(apiResp.body);
-                                const streamUrl = apiData.grabber || apiData.target;
-
-                                if (streamUrl && !videoList.find(v => v.url === streamUrl)) {
-                                    videoList.push({
-                                        url: streamUrl,
-                                        quality: serverName,
-                                        originalUrl: streamUrl,
-                                        headers: {
-                                            'Referer': this.baseUrl + '/',
-                                            'Origin': this.baseUrl
-                                        }
-                                    });
-                                }
-                            } catch (apiError) {
-                                // Ignora errori API, abbiamo già il fallback
-                            }
-                        }
-                    }
+            return [{
+                url: streamUrl,
+                quality: "1080p",
+                originalUrl: streamUrl,
+                headers: {
+                    'Referer': this.baseUrl + '/',
+                    'Origin': this.baseUrl
                 }
-            }
-
-            return videoList;
-
+            }];
         } catch (error) {
             throw error;
         }
