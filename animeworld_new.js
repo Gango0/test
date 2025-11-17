@@ -35,12 +35,7 @@ class DefaultExtension extends MProvider {
     }
 
     async getPopular(page) {
-        try {
-            const url = `${this.baseUrl}/filter?sort=6&page=${page}`;
-            return await this.search('', page); // Riusa la logica di search
-        } catch (error) {
-            throw error;
-        }
+        throw new Error("getPopular not implemented");
     }
 
     get supportsLatest() {
@@ -176,122 +171,25 @@ class DefaultExtension extends MProvider {
             const resp = await this.client.get(url, { headers: this.getHeaders() });
             const html = resp.body;
 
-            // Controlla errore copyright
-            const copyrightMatch = html.match(/<div class="alert alert-primary[^>]*>[^<]*Copyright[^<]*<\/div>/i);
-            if (copyrightMatch) {
-                throw new Error("Video rimosso per Copyright");
-            }
-
-            const videoList = [];
-
-            // METODO 1: Cerca link diretti in <center>
-            const centerLinksRegex = /<center>[\s\S]*?<a[^>]+href="([^"]+)"[^>]*>([^<]+)<\/a>[\s\S]*?<\/center>/g;
-            let centerMatch;
-
-            while ((centerMatch = centerLinksRegex.exec(html)) !== null) {
-                const linkUrl = centerMatch[1];
-                const linkText = centerMatch[2].trim();
-
-                // Filtra solo i link ai server esterni
-                if (linkUrl.includes('doo') || 
-                    linkUrl.includes('streamtape') || 
-                    linkUrl.includes('streamhide') ||
-                    linkUrl.includes('vidguard') ||
-                    linkUrl.includes('listeamed')) {
-                    
-                    videoList.push({
-                        url: linkUrl,
-                        quality: linkText || 'External Server',
-                        originalUrl: linkUrl,
-                        headers: {
-                            'Referer': this.baseUrl + '/',
-                            'Origin': this.baseUrl
-                        }
-                    });
-                }
-            }
-
-            // METODO 2: API per server alternativi
-            const epIdMatch = html.match(/data-episode-id="(\d+)"/);
+            const idRegex = /<a[^>]+href="([^"]+)"[^>]*id="alternativeDownloadLink"/;
+            const match = html.match(idRegex);
             
-            if (epIdMatch) {
-                const epId = epIdMatch[1];
-                
-                // Trova tutti i server tabs
-                const serverTabRegex = /<span class="server-tab"[^>]*data-name="([^"]+)"[^>]*>([^<]+)<\/span>/g;
-                let serverMatch;
-
-                while ((serverMatch = serverTabRegex.exec(html)) !== null) {
-                    const dataName = serverMatch[1];
-                    const serverName = serverMatch[2].trim();
-
-                    // Cerca data-id per questo server
-                    const serverSectionRegex = new RegExp(`<div class="server"[^>]*data-name="${dataName}"[^>]*>([\\s\\S]*?)<\\/ul>\\s*<\\/div>`);
-                    const serverSectionMatch = html.match(serverSectionRegex);
-
-                    if (serverSectionMatch) {
-                        const dataIdRegex = new RegExp(`<a[^>]*data-episode-id="${epId}"[^>]*data-id="([^"]+)"`);
-                        const dataIdMatch = serverSectionMatch[1].match(dataIdRegex);
-
-                        if (dataIdMatch) {
-                            const dataId = dataIdMatch[1];
-                            
-                            try {
-                                const apiUrl = `${this.baseUrl}/api/episode/info?id=${dataId}&alt=0`;
-                                const apiResp = await this.client.get(apiUrl, {
-                                    headers: {
-                                        'Accept': 'application/json, text/javascript, */*; q=0.01',
-                                        'Content-Type': 'application/json',
-                                        'Host': 'www.animeworld.ac',
-                                        'Referer': url,
-                                        'X-Requested-With': 'XMLHttpRequest',
-                                        'User-Agent': this.getHeaders()['User-Agent']
-                                    }
-                                });
-
-                                const apiData = JSON.parse(apiResp.body);
-                                const streamUrl = apiData.grabber || apiData.target;
-
-                                if (streamUrl) {
-                                    videoList.push({
-                                        url: streamUrl,
-                                        quality: serverName,
-                                        originalUrl: streamUrl,
-                                        headers: {
-                                            'Referer': this.baseUrl + '/',
-                                            'Origin': this.baseUrl
-                                        }
-                                    });
-                                }
-                            } catch (apiError) {
-                                console.log(`Errore API per ${serverName}: ${apiError.message}`);
-                            }
-                        }
-                    }
-                }
+            if (!match) {
+                return [];
             }
 
-            // METODO 3: Fallback - alternativeDownloadLink (AnimeWorld Server)
-            if (videoList.length === 0) {
-                const idRegex = /<a[^>]+href="([^"]+)"[^>]*id="alternativeDownloadLink"/;
-                const match = html.match(idRegex);
-                
-                if (match) {
-                    videoList.push({
-                        url: match[1],
-                        quality: "AnimeWorld Server",
-                        originalUrl: match[1],
-                        headers: {
-                            'Referer': this.baseUrl + '/',
-                            'Origin': this.baseUrl
-                        }
-                    });
-                }
-            }
+            const streamUrl = match[1];
 
-            return videoList;
+            return [{
+                url: streamUrl,
+                quality: "1080p",
+                originalUrl: streamUrl,
+                headers: {
+                    'Referer': this.baseUrl + '/',
+                    'Origin': this.baseUrl
+                }
+            }];
         } catch (error) {
-            console.error("Errore getVideoList:", error);
             throw error;
         }
     }
