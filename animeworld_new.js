@@ -176,55 +176,93 @@ class DefaultExtension extends MProvider {
             const resp = await this.client.get(url, { headers: this.getHeaders() });
             const html = resp.body;
 
-            // Estrai episode ID
-            const epIdMatch = html.match(/data-episode-id="([^"]+)"/);
-            if (!epIdMatch) return [];
+            // Controlla errore copyright
+            const copyrightMatch = html.match(/<div class="alert alert-primary[^>]*>[^<]*Copyright[^<]*<\/div>/i);
+            if (copyrightMatch) {
+                throw new Error("Video rimosso per Copyright");
+            }
+
+            // Estrai episode ID dal player
+            const epIdMatch = html.match(/data-episode-id="(\d+)"/);
+            if (!epIdMatch) {
+                console.log("Episode ID non trovato");
+                return [];
+            }
             
             const epId = epIdMatch[1];
             const videoList = [];
 
-            // Trova tutti i server alternativi
-            const serverRegex = /<span class="server-tab"[^>]*data-name="([^"]+)"[^>]*>([^<]+)<\/span>/g;
-            let serverMatch;
+            // Trova tutti i server (nota: cerchiamo dentro div.servers)
+            const serversBlockMatch = html.match(/<div class="servers">([\s\S]*?)<\/div>\s*<\/div>\s*<\/div>/);
+            
+            if (serversBlockMatch) {
+                const serversHtml = serversBlockMatch[1];
+                const serverRegex = /<span class="server-tab"[^>]*data-name="([^"]+)"[^>]*>([^<]+)<\/span>/g;
+                let serverMatch;
 
-            while ((serverMatch = serverRegex.exec(html)) !== null) {
-                const serverName = serverMatch[2].trim();
-                const dataName = serverMatch[1];
-
-                // Trova data-id per questo server
-                const dataIdRegex = new RegExp(`<div class="server"[^>]*data-name="${dataName}"[^>]*>[\\s\\S]*?<a[^>]*data-episode-id="${epId}"[^>]*data-id="([^"]+)"`);
-                const dataIdMatch = html.match(dataIdRegex);
-
-                if (dataIdMatch) {
-                    const dataId = dataIdMatch[1];
-                    
-                    // Chiama API per ottenere URL
-                    const apiUrl = `${this.baseUrl}/api/episode/info?id=${dataId}&alt=0`;
-                    const apiResp = await this.client.get(apiUrl, {
-                        headers: {
-                            ...this.getHeaders(),
-                            'Accept': 'application/json, text/javascript, */*; q=0.01',
-                            'X-Requested-With': 'XMLHttpRequest',
-                            'Referer': url
-                        }
+                const servers = [];
+                while ((serverMatch = serverRegex.exec(serversHtml)) !== null) {
+                    servers.push({
+                        dataName: serverMatch[1],
+                        name: serverMatch[2].trim()
                     });
+                }
 
-                    const apiData = JSON.parse(apiResp.body);
-                    const streamUrl = apiData.grabber;
+                console.log(`Trovati ${servers.length} server`);
 
-                    videoList.push({
-                        url: streamUrl,
-                        quality: serverName,
-                        originalUrl: streamUrl,
-                        headers: {
-                            'Referer': this.baseUrl + '/',
-                            'Origin': this.baseUrl
+                // Per ogni server, trova il data-id corrispondente
+                for (const server of servers) {
+                    // Cerca la sezione del server specifico
+                    const serverSectionRegex = new RegExp(`<div class="server"[^>]*data-name="${server.dataName}"[^>]*>([\\s\\S]*?)<\\/div>\\s*<\\/div>`);
+                    const serverSectionMatch = html.match(serverSectionRegex);
+
+                    if (serverSectionMatch) {
+                        const serverSection = serverSectionMatch[1];
+                        // Cerca il link con l'episode ID corrispondente
+                        const dataIdRegex = new RegExp(`<a[^>]*data-episode-id="${epId}"[^>]*data-id="([^"]+)"`);
+                        const dataIdMatch = serverSection.match(dataIdRegex);
+
+                        if (dataIdMatch) {
+                            const dataId = dataIdMatch[1];
+                            
+                            try {
+                                // Chiama API per ottenere URL stream
+                                const apiUrl = `${this.baseUrl}/api/episode/info?id=${dataId}&alt=0`;
+                                const apiResp = await this.client.get(apiUrl, {
+                                    headers: {
+                                        'Accept': 'application/json, text/javascript, */*; q=0.01',
+                                        'Content-Type': 'application/json',
+                                        'Host': 'www.animeworld.ac',
+                                        'Referer': url,
+                                        'X-Requested-With': 'XMLHttpRequest',
+                                        'User-Agent': this.getHeaders()['User-Agent']
+                                    }
+                                });
+
+                                const apiData = JSON.parse(apiResp.body);
+                                const streamUrl = apiData.grabber || apiData.target;
+
+                                if (streamUrl) {
+                                    videoList.push({
+                                        url: streamUrl,
+                                        quality: server.name,
+                                        originalUrl: streamUrl,
+                                        headers: {
+                                            'Referer': this.baseUrl + '/',
+                                            'Origin': this.baseUrl
+                                        }
+                                    });
+                                    console.log(`Server ${server.name}: ${streamUrl}`);
+                                }
+                            } catch (apiError) {
+                                console.log(`Errore API per ${server.name}: ${apiError.message}`);
+                            }
                         }
-                    });
+                    }
                 }
             }
 
-            // Fallback al metodo originale
+            // Fallback: cerca alternativeDownloadLink
             if (videoList.length === 0) {
                 const idRegex = /<a[^>]+href="([^"]+)"[^>]*id="alternativeDownloadLink"/;
                 const match = html.match(idRegex);
@@ -244,6 +282,7 @@ class DefaultExtension extends MProvider {
 
             return videoList;
         } catch (error) {
+            console.error("Errore getVideoList:", error);
             throw error;
         }
     }
