@@ -144,15 +144,27 @@ async function extractEpisodes(url) {
 
 async function extractStreamUrl(url) {
   try {
-    const response = await soraFetch(url);
-    const html = await response.text();
+    const episodeId = url.split("/").pop();
+    const baseUrl = "https://www.animeworld.ac";
+    const apiUrl = `${baseUrl}/api/episode/info?id=${episodeId}`;
 
-    const idRegex = /<a[^>]+href="([^"]+)"[^>]*id="alternativeDownloadLink"/;
-    const match = html.match(idRegex);
-    return match ? match[1] : null;
+    const response = await soraFetch(apiUrl, {
+      headers: {
+        "X-Requested-With": "XMLHttpRequest",
+        "Referer": url,
+      },
+    });
+
+    const data = await response.json();
+
+    if (data && data.stream) return data.stream;
+    if (data && data.url) return data.url;
+    if (data && data.grabber) return data.grabber;
+
+    return null;
   } catch (error) {
     console.log("Stream URL error:", error);
-    return "https://files.catbox.moe/avolvc.mp4";
+    return null;
   }
 }
 

@@ -11,7 +11,7 @@
   "quality": "1080p",
   "baseUrl": "https://animeworld.ac/",
   "searchBaseUrl": "https://www.animeworld.ac/search?keyword=%s",
-  "scriptUrl": "https://git.luna-app.eu/50n50/sources/raw/branch/main/animeworld/animeworld.js",
+  "scriptUrl": "https://raw.githubusercontent.com/Gango0/test/refs/heads/main/aw.js",
   "type": "anime",
   "asyncJS": true,
   "supportsMojuru": true,
