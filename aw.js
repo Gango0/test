@@ -148,6 +148,9 @@ async function extractStreamUrl(url) {
     const baseUrl = "https://www.animeworld.ac";
     const apiUrl = `${baseUrl}/api/episode/info?id=${episodeId}`;
 
+    console.log("episodeId: " + episodeId);
+    console.log("apiUrl: " + apiUrl);
+
     const response = await soraFetch(apiUrl, {
       headers: {
         "X-Requested-With": "XMLHttpRequest",
@@ -155,7 +158,12 @@ async function extractStreamUrl(url) {
       },
     });
 
-    const data = await response.json();
+    console.log("response status: " + response?.status);
+
+    const text = await response.text();
+    console.log("RAW API RESPONSE: " + text);
+
+    const data = JSON.parse(text);
 
     if (data && data.stream) return data.stream;
     if (data && data.url) return data.url;
@@ -163,7 +171,7 @@ async function extractStreamUrl(url) {
 
     return null;
   } catch (error) {
-    console.log("Stream URL error:", error);
+    console.log("Stream URL error: " + error);
     return null;
   }
 }
