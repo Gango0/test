@@ -62,7 +62,11 @@ class DefaultExtension extends MProvider {
             const img = a.selectFirst("img");
             const imageUrl = img?.attr("src") ?? img?.attr("data-src") ?? "";
 
-            list.push({ url, name, imageUrl });
+            list.push({
+                link: url,
+                name,
+                imageUrl
+            });
         }
 
         const nextLink = doc.selectFirst("a[href*='cursor=']");
@@ -124,8 +128,8 @@ class DefaultExtension extends MProvider {
         if (filters?.length > 0) {
             const get = (i) => filters[i]?.values?.[filters[i]?.state]?.value ?? "";
             const status = get(0); if (status) params.push(`status=${encodeURIComponent(status)}`);
-            const type   = get(1); if (type)   params.push(`type=${encodeURIComponent(type)}`);
-            const genre  = get(2); if (genre)  params.push(`genre=${encodeURIComponent(genre)}`);
+            const type = get(1); if (type) params.push(`type=${encodeURIComponent(type)}`);
+            const genre = get(2); if (genre) params.push(`genre=${encodeURIComponent(genre)}`);
         }
 
         return await this.fetchSeriesPage(params.join("&"), page);
@@ -152,8 +156,8 @@ class DefaultExtension extends MProvider {
         const skipAuthors = new Set(["Unknown", "Updating"]);
         const author = [...new Set(
             doc.select("a[href*='/author/']")
-               .map(a => a.text.trim())
-               .filter(t => t && !skipAuthors.has(t))
+                .map(a => a.text.trim())
+                .filter(t => t && !skipAuthors.has(t))
         )].join(", ");
 
         const status = this.parseStatus(doc.selectFirst("a[href*='?status=']")?.text ?? "");
@@ -242,12 +246,12 @@ class DefaultExtension extends MProvider {
                 name: "Status",
                 state: 0,
                 values: [
-                    { type_name: "SelectOption", name: "All",          value: "" },
-                    { type_name: "SelectOption", name: "Ongoing",      value: "Ongoing" },
-                    { type_name: "SelectOption", name: "Completed",    value: "Completed" },
-                    { type_name: "SelectOption", name: "Pending",      value: "Pending" },
-                    { type_name: "SelectOption", name: "Hiatus",       value: "Hiatus" },
-                    { type_name: "SelectOption", name: "On Hiatus",    value: "On_hiatus" },
+                    { type_name: "SelectOption", name: "All", value: "" },
+                    { type_name: "SelectOption", name: "Ongoing", value: "Ongoing" },
+                    { type_name: "SelectOption", name: "Completed", value: "Completed" },
+                    { type_name: "SelectOption", name: "Pending", value: "Pending" },
+                    { type_name: "SelectOption", name: "Hiatus", value: "Hiatus" },
+                    { type_name: "SelectOption", name: "On Hiatus", value: "On_hiatus" },
                     { type_name: "SelectOption", name: "Discontinued", value: "Discontinued" },
                 ],
             },
@@ -256,14 +260,14 @@ class DefaultExtension extends MProvider {
                 name: "Type",
                 state: 0,
                 values: [
-                    { type_name: "SelectOption", name: "All",       value: "" },
-                    { type_name: "SelectOption", name: "Manga",     value: "Manga" },
-                    { type_name: "SelectOption", name: "Manhwa",    value: "Manhwa" },
-                    { type_name: "SelectOption", name: "Manhua",    value: "Manhua" },
-                    { type_name: "SelectOption", name: "Webtoon",   value: "Webtoon" },
+                    { type_name: "SelectOption", name: "All", value: "" },
+                    { type_name: "SelectOption", name: "Manga", value: "Manga" },
+                    { type_name: "SelectOption", name: "Manhwa", value: "Manhwa" },
+                    { type_name: "SelectOption", name: "Manhua", value: "Manhua" },
+                    { type_name: "SelectOption", name: "Webtoon", value: "Webtoon" },
                     { type_name: "SelectOption", name: "Doujinshi", value: "Doujinshi" },
-                    { type_name: "SelectOption", name: "One-shot",  value: "One-shot" },
-                    { type_name: "SelectOption", name: "Novel",     value: "Novel" },
+                    { type_name: "SelectOption", name: "One-shot", value: "One-shot" },
+                    { type_name: "SelectOption", name: "Novel", value: "Novel" },
                 ],
             },
             {
@@ -271,38 +275,38 @@ class DefaultExtension extends MProvider {
                 name: "Genre",
                 state: 0,
                 values: [
-                    { type_name: "SelectOption", name: "All",           value: "" },
-                    { type_name: "SelectOption", name: "Action",        value: "Action" },
-                    { type_name: "SelectOption", name: "Adventure",     value: "Adventure" },
-                    { type_name: "SelectOption", name: "Boys Love",     value: "Boys+Love" },
-                    { type_name: "SelectOption", name: "Comedy",        value: "Comedy" },
-                    { type_name: "SelectOption", name: "Drama",         value: "Drama" },
-                    { type_name: "SelectOption", name: "Ecchi",         value: "Ecchi" },
-                    { type_name: "SelectOption", name: "Fantasy",       value: "Fantasy" },
-                    { type_name: "SelectOption", name: "Full Color",    value: "Full+Color" },
-                    { type_name: "SelectOption", name: "Girls Love",    value: "Girls+Love" },
-                    { type_name: "SelectOption", name: "Harem",         value: "Harem" },
-                    { type_name: "SelectOption", name: "Historical",    value: "Historical" },
-                    { type_name: "SelectOption", name: "Horror",        value: "Horror" },
-                    { type_name: "SelectOption", name: "Isekai",        value: "Isekai" },
-                    { type_name: "SelectOption", name: "Josei",         value: "Josei" },
-                    { type_name: "SelectOption", name: "Magic",         value: "Magic" },
-                    { type_name: "SelectOption", name: "Martial Arts",  value: "Martial+Arts" },
-                    { type_name: "SelectOption", name: "Mature",        value: "Mature" },
-                    { type_name: "SelectOption", name: "Mystery",       value: "Mystery" },
+                    { type_name: "SelectOption", name: "All", value: "" },
+                    { type_name: "SelectOption", name: "Action", value: "Action" },
+                    { type_name: "SelectOption", name: "Adventure", value: "Adventure" },
+                    { type_name: "SelectOption", name: "Boys Love", value: "Boys+Love" },
+                    { type_name: "SelectOption", name: "Comedy", value: "Comedy" },
+                    { type_name: "SelectOption", name: "Drama", value: "Drama" },
+                    { type_name: "SelectOption", name: "Ecchi", value: "Ecchi" },
+                    { type_name: "SelectOption", name: "Fantasy", value: "Fantasy" },
+                    { type_name: "SelectOption", name: "Full Color", value: "Full+Color" },
+                    { type_name: "SelectOption", name: "Girls Love", value: "Girls+Love" },
+                    { type_name: "SelectOption", name: "Harem", value: "Harem" },
+                    { type_name: "SelectOption", name: "Historical", value: "Historical" },
+                    { type_name: "SelectOption", name: "Horror", value: "Horror" },
+                    { type_name: "SelectOption", name: "Isekai", value: "Isekai" },
+                    { type_name: "SelectOption", name: "Josei", value: "Josei" },
+                    { type_name: "SelectOption", name: "Magic", value: "Magic" },
+                    { type_name: "SelectOption", name: "Martial Arts", value: "Martial+Arts" },
+                    { type_name: "SelectOption", name: "Mature", value: "Mature" },
+                    { type_name: "SelectOption", name: "Mystery", value: "Mystery" },
                     { type_name: "SelectOption", name: "Psychological", value: "Psychological" },
-                    { type_name: "SelectOption", name: "Romance",       value: "Romance" },
-                    { type_name: "SelectOption", name: "School Life",   value: "School+life" },
-                    { type_name: "SelectOption", name: "Sci-Fi",        value: "Sci-Fi" },
-                    { type_name: "SelectOption", name: "Seinen",        value: "Seinen" },
-                    { type_name: "SelectOption", name: "Shoujo",        value: "Shoujo" },
-                    { type_name: "SelectOption", name: "Shounen",       value: "Shounen" },
+                    { type_name: "SelectOption", name: "Romance", value: "Romance" },
+                    { type_name: "SelectOption", name: "School Life", value: "School+life" },
+                    { type_name: "SelectOption", name: "Sci-Fi", value: "Sci-Fi" },
+                    { type_name: "SelectOption", name: "Seinen", value: "Seinen" },
+                    { type_name: "SelectOption", name: "Shoujo", value: "Shoujo" },
+                    { type_name: "SelectOption", name: "Shounen", value: "Shounen" },
                     { type_name: "SelectOption", name: "Slice of Life", value: "Slice+of+Life" },
-                    { type_name: "SelectOption", name: "Sports",        value: "Sports" },
-                    { type_name: "SelectOption", name: "Supernatural",  value: "Supernatural" },
-                    { type_name: "SelectOption", name: "Thriller",      value: "Thriller" },
-                    { type_name: "SelectOption", name: "Tragedy",       value: "Tragedy" },
-                    { type_name: "SelectOption", name: "Yaoi",          value: "Yaoi" },
+                    { type_name: "SelectOption", name: "Sports", value: "Sports" },
+                    { type_name: "SelectOption", name: "Supernatural", value: "Supernatural" },
+                    { type_name: "SelectOption", name: "Thriller", value: "Thriller" },
+                    { type_name: "SelectOption", name: "Tragedy", value: "Tragedy" },
+                    { type_name: "SelectOption", name: "Yaoi", value: "Yaoi" },
                 ],
             },
         ];
