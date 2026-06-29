@@ -6,7 +6,7 @@ const mangayomiSources = [{
     "iconUrl": "https://mangabuddy1.co.uk/assets/mangabuddy1couk/images/logo/mangabuddy.png",
     "typeSource": "single",
     "isManga": true,
-    "version": "0.0.2",
+    "version": "0.0.6",
     "dateFormat": "",
     "dateFormatLocale": "",
     "pkgPath": "manga/src/en/mangabuddy.js"
@@ -16,6 +16,7 @@ class DefaultExtension extends MProvider {
     constructor() {
         super();
         this.client = new Client();
+        this._cursors = {};
     }
 
     parseStatus(text) {
@@ -25,62 +26,90 @@ class DefaultExtension extends MProvider {
             'complete': 1,
             'hiatus': 2,
             'on_hiatus': 2,
+            'discontinued': 2,
             'canceled': 3,
             'cancelled': 3,
             'pending': 5,
-        }[text.toLowerCase().trim()] ?? 5;
+        }[(text ?? "").toLowerCase().trim()] ?? 5;
     }
 
-    // Parse the series grid used by /series and /latest-updates.
-    // Returns { list, hasNextPage }.
+    // Extract slug from a series URL:
+    // "https://mangabuddy1.co.uk/series/the-demon-king-who-lost-his-job.ZDNLGQ"
+    // → "the-demon-king-who-lost-his-job"
+    slugFromUrl(url) {
+        const match = url.match(/\/series\/([^/]+)\.[A-Za-z0-9_-]+$/);
+        return match ? match[1] : "";
+    }
+
+    // ── series list pages ──────────────────────────────────────────────────────
+
     parseSeriesList(res) {
         const doc = new Document(res.body);
         const list = [];
         const seen = new Set();
 
-        // Every card is an <a> pointing to /series/{slug}.{ID}
-        // We only want the "root" series link, not chapter sub-links.
-        const links = doc.select("a[href*='/series/']");
-        for (const a of links) {
+        for (const a of doc.select("a[href*='/series/']")) {
             const href = a.attr("href") ?? "";
-            // Must end with the dotted ID (e.g. .ZDNLGQ) and have NO /chapter- after it
-            if (!href.match(/\/series\/[^/]+\.[A-Za-z0-9_-]+$/) ) continue;
-            const url = href.startsWith("http") ? href : "https://mangabuddy1.co.uk" + href;
+            if (!href.match(/\/series\/[^/]+\.[A-Za-z0-9_-]+$/)) continue;
+            const url = href.startsWith("http") ? href : `${this.source.baseUrl}${href}`;
             if (seen.has(url)) continue;
             seen.add(url);
 
-            // Title: prefer the <h2> or <h3> inside the card; fallback to alt/title attr
-            let name = "";
-            const h = a.selectFirst("h2, h3");
-            if (h) name = h.text.trim();
-            if (!name) name = (a.attr("title") ?? "").trim();
-            if (!name) name = a.text.trim();
+            let name = (a.selectFirst("h2, h3")?.text ?? "").trim();
+            if (!name) name = (a.attr("title") ?? a.text ?? "").trim();
             if (!name) continue;
 
-            // Cover: img inside the card
-            let imageUrl = "";
             const img = a.selectFirst("img");
-            if (img) imageUrl = img.attr("src") ?? img.attr("data-src") ?? "";
+            const imageUrl = img?.attr("src") ?? img?.attr("data-src") ?? "";
 
             list.push({ url, name, imageUrl });
         }
 
-        // Next-page cursor link: "Next" link in the pagination row
         const nextLink = doc.selectFirst("a[href*='cursor=']");
-        const hasNextPage = !!nextLink && list.length > 0;
+        const cursorMatch = (nextLink?.attr("href") ?? "").match(/cursor=([^&]+)/);
+        const nextCursor = cursorMatch ? cursorMatch[1] : "";
 
-        return { list, hasNextPage };
+        return { list, hasNextPage: !!nextCursor && list.length > 0, nextCursor };
     }
 
+    async fetchSeriesPage(baseParams, page) {
+        const cacheKey = `${baseParams}:${page}`;
+        let url = `${this.source.baseUrl}/series`;
+        if (baseParams) url += `?${baseParams}`;
+
+        if (page > 1) {
+            const prevKey = `${baseParams}:${page - 1}`;
+            let cursor = this._cursors[prevKey];
+
+            if (!cursor) {
+                let walkUrl = `${this.source.baseUrl}/series${baseParams ? `?${baseParams}` : ""}`;
+                for (let i = 1; i < page; i++) {
+                    const r = await this.client.get(walkUrl);
+                    const p = this.parseSeriesList(r);
+                    this._cursors[`${baseParams}:${i}`] = p.nextCursor;
+                    if (!p.nextCursor) break;
+                    const sep = baseParams ? "&" : "?";
+                    walkUrl = `${this.source.baseUrl}/series${baseParams ? `?${baseParams}` : ""}${sep}cursor=${p.nextCursor}`;
+                }
+                cursor = this._cursors[prevKey] ?? "";
+            }
+
+            if (cursor) {
+                const sep = baseParams ? "&" : "?";
+                url += `${sep}cursor=${cursor}`;
+            }
+        }
+
+        const res = await this.client.get(url);
+        const parsed = this.parseSeriesList(res);
+        this._cursors[cacheKey] = parsed.nextCursor;
+        return parsed;
+    }
+
+    // ── public API ─────────────────────────────────────────────────────────────
+
     async getPopular(page) {
-        // /series uses cursor-based pagination; page 1 has no cursor.
-        // We store the cursor in a simple way: page=1 → no cursor, otherwise
-        // we cannot fetch arbitrary pages without knowing the cursor chain.
-        // For now we always fetch page 1 (browse entry point) — the app will
-        // follow hasNextPage by calling with increasing page values, but we
-        // can only provide page 1 reliably without cursor persistence.
-        const res = await this.client.get(`${this.source.baseUrl}/series`);
-        return this.parseSeriesList(res);
+        return await this.fetchSeriesPage("", page);
     }
 
     async getLatestUpdates(page) {
@@ -89,109 +118,115 @@ class DefaultExtension extends MProvider {
     }
 
     async search(query, page, filters) {
-        let url = `${this.source.baseUrl}/series`;
         const params = [];
+        if (query?.trim()) params.push(`q=${encodeURIComponent(query.trim())}`);
 
-        if (query && query.trim() !== "") {
-            params.push(`q=${encodeURIComponent(query.trim())}`);
+        if (filters?.length > 0) {
+            const get = (i) => filters[i]?.values?.[filters[i]?.state]?.value ?? "";
+            const status = get(0); if (status) params.push(`status=${encodeURIComponent(status)}`);
+            const type   = get(1); if (type)   params.push(`type=${encodeURIComponent(type)}`);
+            const genre  = get(2); if (genre)  params.push(`genre=${encodeURIComponent(genre)}`);
         }
 
-        if (filters && filters.length > 0) {
-            const status = filters[0]?.values?.[filters[0]?.state]?.value ?? "";
-            const type   = filters[1]?.values?.[filters[1]?.state]?.value ?? "";
-            const genre  = filters[2]?.values?.[filters[2]?.state]?.value ?? "";
-            if (status) params.push(`status=${encodeURIComponent(status)}`);
-            if (type)   params.push(`type=${encodeURIComponent(type)}`);
-            if (genre)  params.push(`genre=${encodeURIComponent(genre)}`);
-        }
-
-        if (params.length > 0) url += "?" + params.join("&");
-
-        const res = await this.client.get(url);
-        return this.parseSeriesList(res);
+        return await this.fetchSeriesPage(params.join("&"), page);
     }
 
     async getDetail(url) {
+        // Fetch the series HTML page for metadata
         const res = await this.client.get(url);
         const doc = new Document(res.body);
 
-        // Title: first <h1>
-        const title = (doc.selectFirst("h1")?.text ?? "").trim();
+        const name = (doc.selectFirst("h1")?.text ?? "").trim();
 
-        // Cover: the CDN thumb URL is predictable from the slug
-        // It also appears in the og:image meta or directly in an <img>
         let imageUrl = (doc.selectFirst("meta[property='og:image']")?.attr("content") ?? "").trim();
-        // og:image on the detail page points to the CDN thumb — perfect
         if (!imageUrl) {
-            const img = doc.selectFirst("img[src*='love4awalk.xyz/thumb']");
-            imageUrl = img?.attr("src") ?? "";
+            imageUrl = doc.selectFirst("img[src*='love4awalk.xyz/thumb']")?.attr("src") ?? "";
         }
 
-        // Description: the "Summary" paragraph that comes after the genre links
         let description = "";
-        const paras = doc.select("p");
-        for (const p of paras) {
+        for (const p of doc.select("p")) {
             const t = p.text.trim();
             if (t.length > 40) { description = t; break; }
         }
 
-        // Author: links to /author/
-        const authorLinks = doc.select("a[href*='/author/']");
-        const authors = [...new Set(
-            authorLinks.map(a => a.text.trim()).filter(t => t && t !== "Updating")
+        const skipAuthors = new Set(["Unknown", "Updating"]);
+        const author = [...new Set(
+            doc.select("a[href*='/author/']")
+               .map(a => a.text.trim())
+               .filter(t => t && !skipAuthors.has(t))
+        )].join(", ");
+
+        const status = this.parseStatus(doc.selectFirst("a[href*='?status=']")?.text ?? "");
+
+        const genre = [...new Set(
+            doc.select("a[href*='/genre/']").map(a => a.text.trim()).filter(Boolean)
         )];
-        const author = authors.join(", ");
 
-        // Status: link to ?status=
-        const statusLink = doc.selectFirst("a[href*='?status=']");
-        const status = this.parseStatus(statusLink?.text ?? "");
-
-        // Genres: links to /genre/
-        const genreLinks = doc.select("a[href*='/genre/']");
-        const genre = [...new Set(genreLinks.map(a => a.text.trim()).filter(Boolean))];
-
-        // Chapters: every link containing /chapter- that belongs to this series
-        const chapLinks = doc.select(`a[href*='${url.replace("https://mangabuddy1.co.uk", "")}/chapter-']`);
+        // Fetch ALL chapters from the dedicated JSON endpoint
+        const slug = this.slugFromUrl(url);
         const chapters = [];
-        const seenChap = new Set();
 
-        for (const a of chapLinks) {
-            const href = a.attr("href") ?? "";
-            if (!href.match(/\/chapter-[\d.]+$/)) continue;
-            const chapUrl = href.startsWith("http") ? href : "https://mangabuddy1.co.uk" + href;
-            if (seenChap.has(chapUrl)) continue;
-            seenChap.add(chapUrl);
+        if (slug) {
+            try {
+                const chapRes = await this.client.get(
+                    `${this.source.baseUrl}/get-chapter-list?slug=${slug}`,
+                    {
+                        "Accept": "application/json",
+                        "Content-Type": "application/json",
+                        "X-Requested-With": "XMLHttpRequest",
+                        "Referer": url,
+                    }
+                );
 
-            // Name: the link text often duplicates itself ("Chapter 448 Chapter 448")
-            // Take only the first occurrence by splitting on repeated text
-            let name = a.text.trim().replace(/\s+/g, " ");
-            // Deduplicate "Chapter N Chapter N" → "Chapter N"
-            name = name.replace(/^(.+?)\s+\1$/, "$1");
-            if (!name) {
-                const m = href.match(/chapter-([\d.]+)$/);
-                name = m ? `Chapter ${m[1]}` : href;
+                // Response: { success: true, total: N, data: [ { chapter_name, chapter_slug, updated_at, ... } ] }
+                const data = JSON.parse(chapRes.body);
+                const items = data.data ?? [];
+
+                for (const item of items) {
+                    const chapSlug = item.chapter_slug ?? "";
+                    if (!chapSlug) continue;
+
+                    const chapUrl = `${url}/${chapSlug}`;
+                    const chapName = item.chapter_name ?? chapSlug;
+
+                    let dateUpload = null;
+                    if (item.updated_at) {
+                        const ts = new Date(item.updated_at).getTime();
+                        if (!isNaN(ts)) dateUpload = ts.toString();
+                    }
+
+                    chapters.push({ name: chapName, url: chapUrl, dateUpload });
+                }
+            } catch (e) {
+                // API failed — fall back to the ≤20 chapters visible in the HTML
+                const seriesPath = url.replace(this.source.baseUrl, "");
+                const seenChap = new Set();
+                for (const a of doc.select(`a[href*='${seriesPath}/chapter-']`)) {
+                    const href = a.attr("href") ?? "";
+                    if (!href.match(/\/chapter-[\d.]+$/)) continue;
+                    const chapUrl = href.startsWith("http") ? href : `${this.source.baseUrl}${href}`;
+                    if (seenChap.has(chapUrl)) continue;
+                    seenChap.add(chapUrl);
+                    const raw = a.text.trim().replace(/\s+/g, " ");
+                    const chapName = raw.replace(/^(Chapter [\d.]+)\s+\1.*$/, "$1");
+                    chapters.push({ name: chapName, url: chapUrl });
+                }
             }
-
-            chapters.push({ name, url: chapUrl });
         }
 
-        return { name: title, imageUrl, description, author, status, genre, chapters };
+        return { name, imageUrl, description, author, status, genre, chapters };
     }
 
     async getPageList(url) {
         const res = await this.client.get(url);
         const doc = new Document(res.body);
 
-        // All <img> on the CDN that are NOT the discord banner or the cover thumb
-        const imgs = doc.select("img[src*='love4awalk.xyz']");
         const pages = [];
         const seen = new Set();
 
-        for (const img of imgs) {
+        for (const img of doc.select("img[src*='love4awalk.xyz']")) {
             const src = img.attr("src") ?? "";
-            if (!src) continue;
-            if (src.includes("/thumb/")) continue;   // cover, not a page
-            if (src.includes("discord")) continue;
+            if (!src || src.includes("/thumb/") || src.includes("discord")) continue;
             if (seen.has(src)) continue;
             seen.add(src);
             pages.push({ url: src, headers: { "Referer": "https://cdn1.love4awalk.xyz/" } });
@@ -207,12 +242,13 @@ class DefaultExtension extends MProvider {
                 name: "Status",
                 state: 0,
                 values: [
-                    { type_name: "SelectOption", name: "All",        value: "" },
-                    { type_name: "SelectOption", name: "Ongoing",    value: "Ongoing" },
-                    { type_name: "SelectOption", name: "Completed",  value: "Completed" },
-                    { type_name: "SelectOption", name: "Pending",    value: "Pending" },
-                    { type_name: "SelectOption", name: "Hiatus",     value: "Hiatus" },
-                    { type_name: "SelectOption", name: "On Hiatus",  value: "On_hiatus" },
+                    { type_name: "SelectOption", name: "All",          value: "" },
+                    { type_name: "SelectOption", name: "Ongoing",      value: "Ongoing" },
+                    { type_name: "SelectOption", name: "Completed",    value: "Completed" },
+                    { type_name: "SelectOption", name: "Pending",      value: "Pending" },
+                    { type_name: "SelectOption", name: "Hiatus",       value: "Hiatus" },
+                    { type_name: "SelectOption", name: "On Hiatus",    value: "On_hiatus" },
+                    { type_name: "SelectOption", name: "Discontinued", value: "Discontinued" },
                 ],
             },
             {
