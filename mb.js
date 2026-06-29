@@ -173,13 +173,7 @@ class DefaultExtension extends MProvider {
         if (slug) {
             try {
                 const chapRes = await this.client.get(
-                    `${this.source.baseUrl}/get-chapter-list?slug=${slug}`,
-                    {
-                        "Accept": "application/json",
-                        "Content-Type": "application/json",
-                        "X-Requested-With": "XMLHttpRequest",
-                        "Referer": url,
-                    }
+                    `${this.source.baseUrl}/get-chapter-list?slug=${slug}`
                 );
 
                 // Response: { success: true, total: N, data: [ { chapter_name, chapter_slug, updated_at, ... } ] }
