@@ -1,0 +1,23 @@
+{
+    "name": "MangaBuddy",
+    "id": 28305267,
+    "baseUrl": "https://mangabuddy1.co.uk",
+    "lang": "it",
+    "typeSource": "single",
+    "iconUrl": "https://mangabuddy1.co.uk/assets/mangabuddy1couk/images/logo/mangabuddy.png",
+    "dateFormat": "",
+    "dateFormatLocale": "",
+    "isNsfw": false,
+    "hasCloudflare": false,
+    "sourceCodeUrl": "https://raw.githubusercontent.com/entityJY/mangayomi-extensions-eJ/main/javascript/manga/src/it/mangaworld.js",
+    "apiUrl": "",
+    "version": "0.0.1",
+    "isManga": true,
+    "itemType": 0,
+    "isFullData": false,
+    "appMinVerReq": "0.5.0",
+    "additionalParams": "",
+    "sourceCodeLanguage": 1,
+    "notes": ""
+}
+
