@@ -58,6 +58,8 @@ class DefaultExtension extends MProvider {
             if (seen.has(url)) continue;
             seen.add(url);
 
+            if (!url.startsWith("http")) continue;
+
             let name = (a.selectFirst("h2, h3")?.text ?? "").trim();
             if (!name) name = (a.attr("title") ?? a.text ?? "").trim();
             if (!name) continue;
@@ -123,8 +125,24 @@ class DefaultExtension extends MProvider {
 
     async search(query, page, filters) {
         console.log("search called with query:", query);
+        console.log("search params:", {
+            page,
+            filtersLength: filters?.length ?? 0,
+            filters: (filters ?? []).map((filter, index) => ({
+                index,
+                name: filter?.name,
+                state: filter?.state,
+                values: (filter?.values ?? []).map((value) => value?.value),
+            })),
+        });
+
+        const trimmed = query?.trim() ?? "";
+        if (!trimmed && (!filters || filters.length === 0)) {
+            return { list: [], hasNextPage: false };
+        }
+
         const params = [];
-        if (query?.trim()) params.push(`q=${encodeURIComponent(query.trim())}`);
+        if (trimmed) params.push(`q=${encodeURIComponent(trimmed)}`);
 
         if (filters?.length > 0) {
             const get = (i) => filters[i]?.values?.[filters[i]?.state]?.value ?? "";
@@ -138,7 +156,7 @@ class DefaultExtension extends MProvider {
 
     async getDetail(url) {
         console.log("getDetail called with url:", url);
-        if (!url || !url.startsWith("http")) {
+        if (!url || typeof url !== "string" || !url.startsWith("http")) {
             throw new Error("Invalid URL passed to getDetail: " + url);
         }
         const res = await this.client.get(url);
