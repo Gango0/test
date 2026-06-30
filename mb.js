@@ -124,34 +124,36 @@ class DefaultExtension extends MProvider {
     }
 
     async search(query, page, filters) {
-        console.log("search called with query:", query);
-        console.log("search params:", {
-            page,
-            filtersLength: filters?.length ?? 0,
-            filters: (filters ?? []).map((filter, index) => ({
-                index,
-                name: filter?.name,
-                state: filter?.state,
-                values: (filter?.values ?? []).map((value) => value?.value),
-            })),
-        });
+        console.log("search raw query:", query);
 
         const trimmed = query?.trim() ?? "";
-        if (!trimmed && (!filters || filters.length === 0)) {
-            return { list: [], hasNextPage: false };
-        }
+        const params = new URLSearchParams();
 
-        const params = [];
-        if (trimmed) params.push(`q=${encodeURIComponent(trimmed)}`);
+        if (trimmed) params.set("search", trimmed);
+        params.set("per_page", "18");
+        params.set("page", String(page));
 
         if (filters?.length > 0) {
             const get = (i) => filters[i]?.values?.[filters[i]?.state]?.value ?? "";
-            const status = get(0); if (status) params.push(`status=${encodeURIComponent(status)}`);
-            const type = get(1); if (type) params.push(`type=${encodeURIComponent(type)}`);
-            const genre = get(2); if (genre) params.push(`genre=${encodeURIComponent(genre)}`);
+            const status = get(0); if (status) params.set("status", status);
+            const type = get(1); if (type) params.set("type", type);
+            const genre = get(2); if (genre) params.set("genres", genre);
         }
 
-        return await this.fetchSeriesPage(params.join("&"), page);
+        const res = await this.client.get(`${this.source.baseUrl}/api/search?${params.toString()}`);
+        const data = JSON.parse(res.body);
+        const comics = data.comics ?? [];
+
+        const list = comics.map(c => ({
+            name: c.title ?? "",
+            link: `${this.source.baseUrl}/series/${c.slug_hash}`,
+            imageUrl: c.image ?? "",
+        }));
+
+        return {
+            list,
+            hasNextPage: data.pagination?.has_next_page ?? false,
+        };
     }
 
     async getDetail(url) {
