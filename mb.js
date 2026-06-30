@@ -122,6 +122,7 @@ class DefaultExtension extends MProvider {
     }
 
     async search(query, page, filters) {
+        console.log("search called with query:", query);
         const params = [];
         if (query?.trim()) params.push(`q=${encodeURIComponent(query.trim())}`);
 
