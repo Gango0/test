@@ -136,8 +136,12 @@ class DefaultExtension extends MProvider {
     }
 
     async getDetail(url) {
-        // Fetch the series HTML page for metadata
+        console.log("getDetail called with url:", url);
+        if (!url || !url.startsWith("http")) {
+            throw new Error("Invalid URL passed to getDetail: " + url);
+        }
         const res = await this.client.get(url);
+
         const doc = new Document(res.body);
 
         const name = (doc.selectFirst("h1")?.text ?? "").trim();
