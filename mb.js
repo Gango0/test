@@ -127,20 +127,20 @@ class DefaultExtension extends MProvider {
         console.log("search raw query:", query);
 
         const trimmed = query?.trim() ?? "";
-        const params = new URLSearchParams();
+        const params = [];
 
-        if (trimmed) params.set("search", trimmed);
-        params.set("per_page", "18");
-        params.set("page", String(page));
+        if (trimmed) params.push(`search=${encodeURIComponent(trimmed)}`);
+        params.push(`per_page=18`);
+        params.push(`page=${page}`);
 
         if (filters?.length > 0) {
             const get = (i) => filters[i]?.values?.[filters[i]?.state]?.value ?? "";
-            const status = get(0); if (status) params.set("status", status);
-            const type = get(1); if (type) params.set("type", type);
-            const genre = get(2); if (genre) params.set("genres", genre);
+            const status = get(0); if (status) params.push(`status=${encodeURIComponent(status)}`);
+            const type = get(1); if (type) params.push(`type=${encodeURIComponent(type)}`);
+            const genre = get(2); if (genre) params.push(`genres=${encodeURIComponent(genre)}`);
         }
 
-        const res = await this.client.get(`${this.source.baseUrl}/api/search?${params.toString()}`);
+        const res = await this.client.get(`${this.source.baseUrl}/api/search?${params.join("&")}`);
         const data = JSON.parse(res.body);
         const comics = data.comics ?? [];
 
