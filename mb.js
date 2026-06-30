@@ -50,7 +50,10 @@ class DefaultExtension extends MProvider {
 
         for (const a of doc.select("a[href*='/series/']")) {
             const href = a.attr("href") ?? "";
+            // Prende solo /series/slug.ID senza /chapter-xxx
             if (!href.match(/\/series\/[^/]+\.[A-Za-z0-9_-]+$/)) continue;
+            if (href.includes("/chapter-")) continue;
+
             const url = href.startsWith("http") ? href : `${this.source.baseUrl}${href}`;
             if (seen.has(url)) continue;
             seen.add(url);
@@ -62,11 +65,7 @@ class DefaultExtension extends MProvider {
             const img = a.selectFirst("img");
             const imageUrl = img?.attr("src") ?? img?.attr("data-src") ?? "";
 
-            list.push({
-                link: url,
-                name,
-                imageUrl
-            });
+            list.push({ link: url, name, imageUrl });
         }
 
         const nextLink = doc.selectFirst("a[href*='cursor=']");
@@ -113,6 +112,7 @@ class DefaultExtension extends MProvider {
     // ── public API ─────────────────────────────────────────────────────────────
 
     async getPopular(page) {
+        console.log("baseUrl:", this.source.baseUrl);
         return await this.fetchSeriesPage("", page);
     }
 
