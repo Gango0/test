@@ -19,5 +19,27 @@
     "additionalParams": "",
     "sourceCodeLanguage": 1,
     "notes": ""
+},
+{
+    "name": "Comix",
+    "id": 28305267089979,
+    "baseUrl": "https://comix.to",
+    "lang": "en",
+    "typeSource": "single",
+    "iconUrl": "https://comix.to/assets/uploads/35595e3de3c99889c1bd2c56f3e3714fc0c457.png",
+    "dateFormat": "",
+    "dateFormatLocale": "",
+    "isNsfw": false,
+    "hasCloudflare": false,
+    "sourceCodeUrl": "https://raw.githubusercontent.com/Gango0/test/refs/heads/main/ct.js",
+    "apiUrl": "",
+    "version": "0.0.1",
+    "isManga": true,
+    "itemType": 0,
+    "isFullData": false,
+    "appMinVerReq": "0.5.0",
+    "additionalParams": "",
+    "sourceCodeLanguage": 1,
+    "notes": ""
 }
 ]

@@ -1,3 +1,17 @@
+const mangayomiSources = [{
+    "name": "Comix",
+    "lang": "en",
+    "baseUrl": "https://comix.to/",
+    "apiUrl": "",
+    "iconUrl": "https://comix.to/assets/uploads/35595e3de3c99889c1bd2c56f3e3714fc0c457.png",
+    "typeSource": "single",
+    "isManga": true,
+    "version": "0.0.1",
+    "dateFormat": "",
+    "dateFormatLocale": "",
+    "pkgPath": "manga/src/en/mangabuddy.js"
+}];
+
 class DefaultExtension extends MProvider {
     constructor() {
         super();
