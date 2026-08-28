@@ -171,24 +171,55 @@ async function extractStreamUrl(url) {
   }
 }
 
-async function soraFetch(
-  url,
-  options = { headers: {}, method: "GET", body: null, encoding: "utf-8" }
-) {
+async function rawFetch(url, headers, method, body, encoding) {
   try {
-    return await fetchv2(
-      url,
-      options.headers ?? {},
-      options.method ?? "GET",
-      options.body ?? null,
-      true,
-      options.encoding ?? "utf-8"
-    );
+    return await fetchv2(url, headers, method, body, true, encoding);
   } catch (e) {
     try {
-      return await fetch(url, options);
+      return await fetch(url, { headers, method, body });
     } catch (error) {
       return null;
     }
   }
+}
+
+async function soraFetch(
+  url,
+  options = { headers: {}, method: "GET", body: null, encoding: "utf-8" }
+) {
+  const headers = options.headers ?? {};
+  const method = options.method ?? "GET";
+  const body = options.body ?? null;
+  const encoding = options.encoding ?? "utf-8";
+
+  let response = await rawFetch(url, headers, method, body, encoding);
+  if (!response) return null;
+
+  let text = await response.text();
+
+  const challengeMatch = text.match(
+    /document\.cookie="([^"]+)";\s*location\.href="([^"]+)"/
+  );
+
+  if (challengeMatch) {
+    const cookieValue = challengeMatch[1].split(";")[0].trim();
+    const redirectUrl = challengeMatch[2].replace(/^http:/, "https:");
+    const challengeHeaders = { ...headers, Cookie: cookieValue };
+
+    const secondResponse = await rawFetch(
+      redirectUrl,
+      challengeHeaders,
+      method,
+      body,
+      encoding
+    );
+    if (secondResponse) {
+      text = await secondResponse.text();
+    }
+  }
+
+  return {
+    text: async () => text,
+    json: async () => JSON.parse(text),
+  };
 }
