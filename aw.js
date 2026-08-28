@@ -143,32 +143,35 @@ async function extractEpisodes(url) {
 }
 
 async function extractStreamUrl(url) {
-  try {
-    const episodeId = url.split("/").pop();
-    const baseUrl = "https://www.animeworld.ac";
-    const apiUrl = `${baseUrl}/api/episode/info?id=${episodeId}`;
+  const episodeId = url.split("/").pop();
+  const baseUrl = "https://www.animeworld.ac";
+  const apiUrl = `${baseUrl}/api/episode/info?id=${episodeId}`;
+  const fetchOptions = {
+    headers: {
+      "X-Requested-With": "XMLHttpRequest",
+      "Referer": url,
+    },
+  };
 
-    const response = await soraFetch(apiUrl, {
-      headers: {
-        "X-Requested-With": "XMLHttpRequest",
-        "Referer": url,
-      },
-    });
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const response = await soraFetch(apiUrl, fetchOptions);
+      if (!response) continue;
 
-    const data = await response.json();
+      const data = await response.json();
+      const streamUrl = data?.grabber || null;
+      if (!streamUrl) continue;
 
-    const streamUrl = data?.grabber || null;
-    if (!streamUrl) return null;
-
-    return JSON.stringify({
-      streams: [{ title: "AnimeWorld Server", streamUrl: streamUrl }],
-      subtitles: ""
-    });
-
-  } catch (error) {
-    console.log("Stream URL error: " + error);
-    return null;
+      return JSON.stringify({
+        streams: [{ title: "AnimeWorld Server", streamUrl: streamUrl }],
+        subtitles: ""
+      });
+    } catch (error) {
+      console.log("Stream URL error: " + error);
+    }
   }
+
+  return null;
 }
 
 async function rawFetch(url, headers, method, body, encoding) {
