@@ -1,0 +1,58 @@
+name: iOS build test (no release)
+
+on:
+  push:
+    branches: [ci-ios-build-test]
+  workflow_dispatch:
+    inputs:
+      source_repo:
+        description: "Repo to build"
+        default: "Gango0/AnymeX"
+      source_branch:
+        description: "Branch to build"
+        default: "ios/uiscene-migration"
+
+env:
+  FLUTTER_VERSION: "3.41.6"
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      - name: Clone app
+        run: |
+          REPO="${{ github.event.inputs.source_repo }}"
+          BRANCH="${{ github.event.inputs.source_branch }}"
+          git clone --depth 1 --branch "${BRANCH:-ios/uiscene-migration}" "https://github.com/${REPO:-Gango0/AnymeX}.git" app
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          flutter --version
+
+      - name: Empty .env (declared as a pubspec asset)
+        run: touch app/.env
+
+      - name: Build iOS (unsigned)
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter build ios --release --no-codesign
+          mkdir -p build/ios/iphoneos/Payload
+          ln -s ../Runner.app build/ios/iphoneos/Payload/Runner.app
+          cd build/ios/iphoneos
+          zip -qr ./AnymeX-iOS-unsigned.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios
+          path: app/build/ios/iphoneos/*.ipa
